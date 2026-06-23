@@ -1,0 +1,72 @@
+const express = require("express");
+const morgan = require("morgan");
+
+const config = require("./config");
+const { isValidWebflowSignature } = require("./webflowSignature");
+const { mapWebflowOrderToClickShipSettlement } = require("./orderMapper");
+const { createClickShipClient } = require("./clickshipClient");
+
+const app = express();
+const clickshipClient = createClickShipClient(config.clickship);
+
+app.use(morgan("combined"));
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    }
+  })
+);
+
+app.get("/health", (_req, res) => {
+  res.json({
+    status: "ok",
+    service: "webflow-clickship-webhook",
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.post("/webhooks/webflow/orders", async (req, res) => {
+  try {
+    const isValid = isValidWebflowSignature(
+      req.rawBody || Buffer.from(JSON.stringify(req.body || {}), "utf8"),
+      req.headers,
+      config.webflowWebhookSecret
+    );
+
+    if (!isValid) {
+      return res.status(401).json({ error: "Invalid webhook signature" });
+    }
+
+    const settlementPayload = mapWebflowOrderToClickShipSettlement(req.body);
+    const clickshipResponse = await clickshipClient.submitSettlement(settlementPayload);
+
+    return res.status(200).json({
+      status: "forwarded",
+      externalOrderId: settlementPayload.externalOrderId,
+      clickship: clickshipResponse
+    });
+  } catch (error) {
+    const responseData = error.response?.data;
+    const statusCode = error.response?.status || 500;
+
+    console.error("Webhook processing failed", {
+      message: error.message,
+      stack: error.stack,
+      clickshipResponse: responseData
+    });
+
+    return res.status(statusCode).json({
+      error: "Failed to process webhook",
+      message: error.message,
+      details: responseData || null
+    });
+  }
+});
+
+app.use((err, _req, res, _next) => {
+  console.error("Unhandled error", err);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+module.exports = app;
