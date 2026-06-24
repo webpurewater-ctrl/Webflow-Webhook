@@ -3,10 +3,10 @@ const dotenv = require("dotenv");
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
-function requireEnv(name) {
+function readEnv(name, fallback = "") {
   const value = process.env[name];
   if (!value || !value.trim()) {
-    throw new Error(`Missing required environment variable: ${name}`);
+    return fallback;
   }
   return value.trim();
 }
@@ -28,9 +28,9 @@ const config = {
   webflowWebhookSecret: process.env.WEBFLOW_WEBHOOK_SECRET || "",
   webhookProcessingTimeoutMs: optionalInt("WEBHOOK_PROCESSING_TIMEOUT_MS", 8000),
   clickship: {
-    baseUrl: requireEnv("CLICKSHIP_BASE_URL"),
-    apiKey: requireEnv("CLICKSHIP_API_KEY"),
-    settlementPath: process.env.CLICKSHIP_SETTLEMENT_PATH || "/v1/settlements/orders",
+    baseUrl: readEnv("CLICKSHIP_BASE_URL"),
+    apiKey: readEnv("CLICKSHIP_API_KEY"),
+    settlementPath: readEnv("CLICKSHIP_SETTLEMENT_PATH", "/v1/settlements/orders"),
     timeoutMs: optionalInt("CLICKSHIP_TIMEOUT_MS", 7000)
   }
 };

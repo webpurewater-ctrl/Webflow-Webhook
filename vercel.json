@@ -7,7 +7,11 @@
   },
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/health",
+      "destination": "/api"
+    },
+    {
+      "source": "/webhooks/webflow/orders",
       "destination": "/api"
     }
   ]

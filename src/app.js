@@ -7,7 +7,6 @@ const { mapWebflowOrderToClickShipSettlement } = require("./orderMapper");
 const { createClickShipClient } = require("./clickshipClient");
 
 const app = express();
-const clickshipClient = createClickShipClient(config.clickship);
 
 function withTimeout(promise, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -48,6 +47,15 @@ app.get("/health", (_req, res) => {
 
 app.post("/webhooks/webflow/orders", async (req, res) => {
   try {
+    if (!config.clickship.baseUrl || !config.clickship.apiKey) {
+      return res.status(500).json({
+        error: "ClickShip is not configured",
+        message: "Set CLICKSHIP_BASE_URL and CLICKSHIP_API_KEY in environment variables"
+      });
+    }
+
+    const clickshipClient = createClickShipClient(config.clickship);
+
     const isValid = isValidWebflowSignature(
       req.rawBody || Buffer.from(JSON.stringify(req.body || {}), "utf8"),
       req.headers,
