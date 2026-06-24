@@ -30,8 +30,8 @@ function withTimeout(promise, timeoutMs) {
 
 app.use(morgan("combined"));
 app.use((req, res, next) => {
-  if (typeof req.setTimeout === "function") {
-    req.setTimeout(config.webhookProcessingTimeoutMs);
+  if (req.socket && typeof req.socket.setTimeout === "function") {
+    req.socket.setTimeout(config.webhookProcessingTimeoutMs);
   }
 
   if (typeof res.setTimeout === "function") {
