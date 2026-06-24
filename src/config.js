@@ -26,11 +26,12 @@ function optionalInt(name, fallback) {
 const config = {
   port: optionalInt("PORT", 3000),
   webflowWebhookSecret: process.env.WEBFLOW_WEBHOOK_SECRET || "",
+  webhookProcessingTimeoutMs: optionalInt("WEBHOOK_PROCESSING_TIMEOUT_MS", 8000),
   clickship: {
     baseUrl: requireEnv("CLICKSHIP_BASE_URL"),
     apiKey: requireEnv("CLICKSHIP_API_KEY"),
     settlementPath: process.env.CLICKSHIP_SETTLEMENT_PATH || "/v1/settlements/orders",
-    timeoutMs: optionalInt("CLICKSHIP_TIMEOUT_MS", 15000)
+    timeoutMs: optionalInt("CLICKSHIP_TIMEOUT_MS", 7000)
   }
 };
 

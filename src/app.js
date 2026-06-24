@@ -9,6 +9,26 @@ const { createClickShipClient } = require("./clickshipClient");
 const app = express();
 const clickshipClient = createClickShipClient(config.clickship);
 
+function withTimeout(promise, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const timeoutError = new Error("Webhook processing exceeded allowed time window");
+      timeoutError.code = "PROCESSING_TIMEOUT";
+      reject(timeoutError);
+    }, timeoutMs);
+
+    promise
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
 app.use(morgan("combined"));
 app.use(
   express.json({
@@ -39,7 +59,10 @@ app.post("/webhooks/webflow/orders", async (req, res) => {
     }
 
     const settlementPayload = mapWebflowOrderToClickShipSettlement(req.body);
-    const clickshipResponse = await clickshipClient.submitSettlement(settlementPayload);
+    const clickshipResponse = await withTimeout(
+      clickshipClient.submitSettlement(settlementPayload),
+      config.webhookProcessingTimeoutMs
+    );
 
     return res.status(200).json({
       status: "forwarded",
@@ -48,7 +71,12 @@ app.post("/webhooks/webflow/orders", async (req, res) => {
     });
   } catch (error) {
     const responseData = error.response?.data;
-    const statusCode = error.response?.status || 500;
+    const statusCode =
+      error.code === "PROCESSING_TIMEOUT"
+        ? 504
+        : error.code === "ECONNABORTED"
+          ? 504
+          : error.response?.status || 500;
 
     console.error("Webhook processing failed", {
       message: error.message,

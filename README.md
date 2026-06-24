@@ -105,6 +105,19 @@ Health endpoint:
 - Vercel Hobby is enough for low-to-moderate webhook traffic.
 - Serverless functions can cold start after idle periods.
 - Keep webhook handlers fast and idempotent.
+- `vercel.json` sets `maxDuration` for `api/index.js` to reduce invocation timeout risk.
+- Set `CLICKSHIP_TIMEOUT_MS` and `WEBHOOK_PROCESSING_TIMEOUT_MS` to values lower than function duration.
+
+### 504 FUNCTION_INVOCATION_TIMEOUT fix
+
+If you see `FUNCTION_INVOCATION_TIMEOUT` in Vercel:
+
+1. In Vercel project environment variables, set:
+	- `CLICKSHIP_TIMEOUT_MS=7000`
+	- `WEBHOOK_PROCESSING_TIMEOUT_MS=8000`
+2. Redeploy the project.
+3. Re-test with `GET /health` and one webhook event.
+4. If timeouts continue, your upstream ClickShip endpoint latency is likely too high. In that case, reduce payload size or add a queue/worker pattern.
 
 ## Webflow Webhook URL
 
