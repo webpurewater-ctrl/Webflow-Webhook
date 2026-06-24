@@ -29,6 +29,18 @@ function withTimeout(promise, timeoutMs) {
 }
 
 app.use(morgan("combined"));
+app.use((req, res, next) => {
+  req.setTimeout(config.webhookProcessingTimeoutMs);
+  res.setTimeout(config.webhookProcessingTimeoutMs, () => {
+    if (!res.headersSent) {
+      res.status(504).json({
+        error: "Request timed out",
+        message: "The request exceeded the server processing limit"
+      });
+    }
+  });
+  next();
+});
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -36,6 +48,14 @@ app.use(
     }
   })
 );
+
+app.get("/", (_req, res) => {
+  res.json({
+    status: "ok",
+    service: "webflow-clickship-webhook",
+    endpoint: "/health"
+  });
+});
 
 app.get("/health", (_req, res) => {
   res.json({
