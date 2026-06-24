@@ -30,15 +30,21 @@ function withTimeout(promise, timeoutMs) {
 
 app.use(morgan("combined"));
 app.use((req, res, next) => {
-  req.setTimeout(config.webhookProcessingTimeoutMs);
-  res.setTimeout(config.webhookProcessingTimeoutMs, () => {
-    if (!res.headersSent) {
-      res.status(504).json({
-        error: "Request timed out",
-        message: "The request exceeded the server processing limit"
-      });
-    }
-  });
+  if (typeof req.setTimeout === "function") {
+    req.setTimeout(config.webhookProcessingTimeoutMs);
+  }
+
+  if (typeof res.setTimeout === "function") {
+    res.setTimeout(config.webhookProcessingTimeoutMs, () => {
+      if (!res.headersSent) {
+        res.status(504).json({
+          error: "Request timed out",
+          message: "The request exceeded the server processing limit"
+        });
+      }
+    });
+  }
+
   next();
 });
 app.use(
