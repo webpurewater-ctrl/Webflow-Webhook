@@ -8,55 +8,78 @@ const { createClickShipClient } = require("./clickshipClient");
 
 const app = express();
 
-function withTimeout(promise, timeoutMs) {
+function withTimeout(promiseFactory, timeoutMs) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+
     const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
       const timeoutError = new Error("Webhook processing exceeded allowed time window");
       timeoutError.code = "PROCESSING_TIMEOUT";
       reject(timeoutError);
     }, timeoutMs);
 
-    promise
+    Promise.resolve()
+      .then(() => promiseFactory())
       .then((result) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
         resolve(result);
       })
       .catch((error) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
         reject(error);
       });
   });
 }
 
-app.use(morgan("combined"));
-app.use((req, _res, next) => {
-  if (req.socket && typeof req.socket.setTimeout === "function") {
-    req.socket.setTimeout(config.webhookProcessingTimeoutMs);
+function getStatusCode(error) {
+  if (error.code === "PROCESSING_TIMEOUT" || error.code === "ECONNABORTED") {
+    return 504;
   }
 
-  next();
-});
+  if (error.name === "AbortError") {
+    return 504;
+  }
+
+  return error.response?.status || 500;
+}
+
+function getErrorPayload(error) {
+  return {
+    error: "Failed to process webhook",
+    message: error.message,
+    details: error.response?.data || null,
+  };
+}
+
+app.disable("x-powered-by");
+app.use(morgan("combined"));
 app.use(
   express.json({
     verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    }
+      req.rawBody = Buffer.from(buf);
+    },
   })
 );
 
 app.get("/", (_req, res) => {
-  res.json({
+  return res.json({
     status: "ok",
     service: "webflow-clickship-webhook",
-    endpoint: "/health"
+    endpoints: ["/health", "/webhooks/webflow/orders"],
   });
 });
 
 app.get("/health", (_req, res) => {
-  res.json({
+  return res.json({
     status: "ok",
     service: "webflow-clickship-webhook",
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -65,14 +88,13 @@ app.post("/webhooks/webflow/orders", async (req, res) => {
     if (!config.clickship.baseUrl || !config.clickship.apiKey) {
       return res.status(500).json({
         error: "ClickShip is not configured",
-        message: "Set CLICKSHIP_BASE_URL and CLICKSHIP_API_KEY in environment variables"
+        message: "Set CLICKSHIP_BASE_URL and CLICKSHIP_API_KEY in environment variables",
       });
     }
 
-    const clickshipClient = createClickShipClient(config.clickship);
-
+    const signaturePayload = req.rawBody || Buffer.from(JSON.stringify(req.body || {}), "utf8");
     const isValid = isValidWebflowSignature(
-      req.rawBody || Buffer.from(JSON.stringify(req.body || {}), "utf8"),
+      signaturePayload,
       req.headers,
       config.webflowWebhookSecret
     );
@@ -82,42 +104,45 @@ app.post("/webhooks/webflow/orders", async (req, res) => {
     }
 
     const settlementPayload = mapWebflowOrderToClickShipSettlement(req.body);
+    const clickshipClient = createClickShipClient(config.clickship);
+
     const clickshipResponse = await withTimeout(
-      clickshipClient.submitSettlement(settlementPayload),
+      () => clickshipClient.submitSettlement(settlementPayload),
       config.webhookProcessingTimeoutMs
     );
 
     return res.status(200).json({
       status: "forwarded",
       externalOrderId: settlementPayload.externalOrderId,
-      clickship: clickshipResponse
+      clickship: clickshipResponse,
     });
   } catch (error) {
-    const responseData = error.response?.data;
-    const statusCode =
-      error.code === "PROCESSING_TIMEOUT"
-        ? 504
-        : error.code === "ECONNABORTED"
-          ? 504
-          : error.response?.status || 500;
+    const statusCode = getStatusCode(error);
 
     console.error("Webhook processing failed", {
       message: error.message,
+      code: error.code,
       stack: error.stack,
-      clickshipResponse: responseData
+      clickshipResponse: error.response?.data || null,
     });
 
-    return res.status(statusCode).json({
-      error: "Failed to process webhook",
-      message: error.message,
-      details: responseData || null
-    });
+    return res.status(statusCode).json(getErrorPayload(error));
   }
 });
 
 app.use((err, _req, res, _next) => {
-  console.error("Unhandled error", err);
-  res.status(500).json({ error: "Internal server error" });
+  console.error("Unhandled error", {
+    message: err.message,
+    code: err.code,
+    stack: err.stack,
+    response: err.response?.data || null,
+  });
+
+  if (res.headersSent) {
+    return;
+  }
+
+  return res.status(getStatusCode(err)).json(getErrorPayload(err));
 });
 
 module.exports = app;

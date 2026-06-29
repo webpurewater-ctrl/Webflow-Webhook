@@ -1,25 +1,24 @@
 const axios = require("axios");
 
-function createClickShipClient(config) {
+function createClickShipClient(clickshipConfig) {
+  const timeout = Number(clickshipConfig.timeoutMs || clickshipConfig.webhookProcessingTimeoutMs || 15000);
+
   const client = axios.create({
-    baseURL: config.baseUrl,
-    timeout: config.timeoutMs,
+    baseURL: clickshipConfig.baseUrl,
+    timeout,
     headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      "Content-Type": "application/json"
-    }
+      "x-api-key": clickshipConfig.apiKey,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
   });
 
-  async function submitSettlement(settlementPayload) {
-    const response = await client.post(config.settlementPath, settlementPayload);
-    return response.data;
-  }
-
   return {
-    submitSettlement
+    async submitSettlement(payload) {
+      const response = await client.post("/settlements", payload);
+      return response.data;
+    },
   };
 }
 
-module.exports = {
-  createClickShipClient
-};
+module.exports = { createClickShipClient };
