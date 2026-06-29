@@ -1,27 +1,10 @@
 {
-  "name": "webflow-clickship-webhook",
+  "name": "node-vercel-app",
   "version": "1.0.0",
-  "description": "Webhook bridge from Webflow ecommerce orders to ClickShip settlement",
-  "main": "src/index.js",
-  "type": "commonjs",
-  "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
-    "vercel-dev": "vercel dev"
-  },
-  "keywords": [
-    "webflow",
-    "webhook",
-    "clickship",
-    "ecommerce"
-  ],
-  "author": "",
-  "license": "MIT",
+  "private": true,
   "dependencies": {
-    "axios": "^1.7.9",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "morgan": "^1.10.0",
-    "serverless-http": "^3.2.0"
+    "express": "^4.19.2",
+    "serverless-http": "^3.2.0",
+    "vercel": "^54.18.3"
   }
 }
